@@ -27,10 +27,25 @@ class Database {
   }
 
   updateAsset(id, computerName, pcUser, modelNumber, serial) {
-    this.db.run(
-      'UPDATE assets SET computerName = ?, pcUser = ?, modelNumber = ?, serial = ? WHERE id = ?',
-      [computerName, pcUser, modelNumber, serial, id]
-    );
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'UPDATE assets SET computerName = ?, pcUser = ?, modelNumber = ?, serial = ? WHERE id = ?',
+        [computerName, pcUser, modelNumber, serial, id],
+        function (err) {
+          if (err) reject(err);
+          else resolve(this.changes > 0);
+        }
+      );
+    });
+  }
+
+  deleteAsset(id) {
+    return new Promise((resolve, reject) => {
+      this.db.run('DELETE FROM assets WHERE id = ?', [id], function (err) {
+        if (err) reject(err);
+        else resolve(this.changes > 0);
+      });
+    });
   }
 
   getAllAssets() {

@@ -63,11 +63,31 @@ app.post('/api/assets', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
-app.put('/api/assets/:id', requireAuth, (req, res) => {
-  const { computerName, pcUser, modelNumber, serial } = req.body;
+function parseId(req, res) {
   const id = Number(req.params.id);
-  db.updateAsset(id, computerName, pcUser, modelNumber, serial);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: 'Invalid id' });
+    return null;
+  }
+  return id;
+}
+
+app.put('/api/assets/:id', requireAuth, async (req, res) => {
+  const id = parseId(req, res);
+  if (id === null) return;
+  const { computerName, pcUser, modelNumber, serial } = req.body;
+  const updated = await db.updateAsset(id, computerName, pcUser, modelNumber, serial);
+  if (!updated) return res.status(404).json({ error: 'Asset not found' });
   io.emit('assetUpdated', { id, computerName, pcUser, modelNumber, serial });
+  res.json({ success: true });
+});
+
+app.delete('/api/assets/:id', requireAuth, async (req, res) => {
+  const id = parseId(req, res);
+  if (id === null) return;
+  const deleted = await db.deleteAsset(id);
+  if (!deleted) return res.status(404).json({ error: 'Asset not found' });
+  io.emit('assetDeleted', { id });
   res.json({ success: true });
 });
 

@@ -25,6 +25,7 @@ const FIELDS: { key: keyof AssetFields; label: string }[] = [
 const app = document.querySelector<HTMLDivElement>('#app')!;
 let assets: Asset[] = [];
 let loginError = '';
+let actionError = '';
 let searchQuery = '';
 let editingId: number | null = null;
 
@@ -74,7 +75,7 @@ async function loadAssets() {
   render();
 }
 
-async function authedRequest(url: string, method: string, body: AssetFields): Promise<boolean> {
+async function authedRequest(url: string, method: string, body?: AssetFields): Promise<boolean> {
   const token = getToken();
   const res = await fetch(url, {
     method,
@@ -82,7 +83,7 @@ async function authedRequest(url: string, method: string, body: AssetFields): Pr
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify(body),
+    body: body ? JSON.stringify(body) : undefined,
   });
   if (res.status === 401) {
     setToken(null);
@@ -90,17 +91,30 @@ async function authedRequest(url: string, method: string, body: AssetFields): Pr
     render();
     return false;
   }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    actionError = body.error ?? `Request failed (${res.status}).`;
+    render();
+    return false;
+  }
+  actionError = '';
   return true;
 }
 
-async function addAsset(asset: AssetFields) {
-  await authedRequest(`${API_URL}/api/assets`, 'POST', asset);
+async function addAsset(asset: AssetFields): Promise<boolean> {
+  const ok = await authedRequest(`${API_URL}/api/assets`, 'POST', asset);
   render();
+  return ok;
 }
 
 async function updateAsset(id: number, asset: AssetFields) {
   const ok = await authedRequest(`${API_URL}/api/assets/${id}`, 'PUT', asset);
   if (ok) editingId = null;
+  render();
+}
+
+async function deleteAsset(id: number) {
+  await authedRequest(`${API_URL}/api/assets/${id}`, 'DELETE');
   render();
 }
 
@@ -125,7 +139,10 @@ function assetRow(a: Asset, token: string | null): string {
       <td>${escapeHtml(a.serial)}</td>
       <td>${new Date(a.createdAt).toLocaleString()}</td>
       <td class="row-actions">
-        ${token ? `<button class="edit-btn" data-id="${a.id}" type="button">Edit</button>` : ''}
+        ${token ? `
+          <button class="edit-btn" data-id="${a.id}" type="button">Edit</button>
+          <button class="delete-btn btn-danger" data-id="${a.id}" type="button">Delete</button>
+        ` : ''}
       </td>
     </tr>
   `;
@@ -139,6 +156,13 @@ function render() {
       <h1>NDOI IT Assets</h1>
       ${token ? '<button id="logout-btn" class="btn-secondary">Log out</button>' : '<button id="login-open-btn" class="btn-secondary">Log in</button>'}
     </header>
+
+    <section class="panel">
+      <h2>Get device info</h2>
+      <p>Run this in PowerShell on the device to get its name, serial, and current AD user:</p>
+      <pre class="code-snippet"><code>Get-CimInstance -ClassName Win32_ComputerSystemProduct | Select-Object Name, SerialNumber; $adUser = Get-ADUser -Identity $env:USERNAME -Properties DisplayName; Write-Host $adUser.DisplayName</code></pre>
+      <button id="copy-snippet-btn" type="button" class="btn-secondary">Copy</button>
+    </section>
 
     ${!token ? `
       <section id="login-panel" class="panel">
@@ -164,6 +188,7 @@ function render() {
 
     <section class="panel">
       <h2>Assets</h2>
+      ${actionError ? `<p class="error">${escapeHtml(actionError)}</p>` : ''}
       <input id="search-input" type="search" placeholder="Search assets..." value="${escapeHtml(searchQuery)}" class="search-input" />
       <table>
         <thead>
@@ -175,6 +200,15 @@ function render() {
       </table>
     </section>
   `;
+
+  document.getElementById('copy-snippet-btn')?.addEventListener('click', (e) => {
+    const code = document.querySelector('.code-snippet code')!.textContent!;
+    navigator.clipboard.writeText(code);
+    const btn = e.target as HTMLButtonElement;
+    const original = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  });
 
   document.getElementById('login-open-btn')?.addEventListener('click', () => {
     loginError = '';
@@ -205,13 +239,13 @@ function render() {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
     const data = new FormData(form);
-    await addAsset({
+    const ok = await addAsset({
       computerName: String(data.get('computerName')),
       pcUser: String(data.get('pcUser')),
       modelNumber: String(data.get('modelNumber')),
       serial: String(data.get('serial')),
     });
-    form.reset();
+    if (ok) form.reset();
   });
 
   const searchInput = document.getElementById('search-input') as HTMLInputElement;
@@ -237,6 +271,17 @@ function render() {
     });
   });
 
+  document.querySelectorAll<HTMLButtonElement>('.delete-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = Number(btn.dataset.id);
+      const row = btn.closest('tr')!;
+      const computerName = row.querySelector('td')?.textContent ?? '';
+      if (confirm(`Delete asset "${computerName}"? This cannot be undone.`)) {
+        await deleteAsset(id);
+      }
+    });
+  });
+
   document.querySelectorAll<HTMLButtonElement>('.save-btn').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const id = Number(btn.dataset.id);
@@ -253,6 +298,7 @@ function render() {
 const socket = io(API_URL);
 socket.on('assetAdded', () => loadAssets());
 socket.on('assetUpdated', () => loadAssets());
+socket.on('assetDeleted', () => loadAssets());
 
 render();
 loadAssets();
