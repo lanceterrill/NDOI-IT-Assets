@@ -63,6 +63,14 @@ app.post('/api/assets', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
+app.put('/api/assets/:id', requireAuth, (req, res) => {
+  const { computerName, pcUser, modelNumber, serial } = req.body;
+  const id = Number(req.params.id);
+  db.updateAsset(id, computerName, pcUser, modelNumber, serial);
+  io.emit('assetUpdated', { id, computerName, pcUser, modelNumber, serial });
+  res.json({ success: true });
+});
+
 app.post('/api/verify', requireAuth, (req, res) => {
   res.json({ ok: true });
 });

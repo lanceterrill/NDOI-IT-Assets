@@ -89,6 +89,13 @@ button:hover {
   font-weight: 600;
 }
 
+.search-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 1rem;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -103,4 +110,18 @@ th, td {
 th {
   color: var(--navy);
   font-weight: 600;
+}
+
+td .edit-field {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.row-actions {
+  white-space: nowrap;
+}
+
+.row-actions button {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
 }

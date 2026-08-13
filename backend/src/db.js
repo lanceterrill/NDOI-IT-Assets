@@ -26,6 +26,13 @@ class Database {
     );
   }
 
+  updateAsset(id, computerName, pcUser, modelNumber, serial) {
+    this.db.run(
+      'UPDATE assets SET computerName = ?, pcUser = ?, modelNumber = ?, serial = ? WHERE id = ?',
+      [computerName, pcUser, modelNumber, serial, id]
+    );
+  }
+
   getAllAssets() {
     return new Promise((resolve) => {
       this.db.all('SELECT * FROM assets ORDER BY createdAt DESC', [], (err, rows) => {
