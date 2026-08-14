@@ -160,7 +160,7 @@ function render() {
     <section class="panel">
       <h2>Get device info</h2>
       <p>Run this in PowerShell on the device to get its name, serial, and current AD user:</p>
-      <pre class="code-snippet"><code>Get-CimInstance -ClassName Win32_ComputerSystemProduct | Select-Object Name, SerialNumber; $adUser = Get-ADUser -Identity $env:USERNAME -Properties DisplayName; Write-Host $adUser.DisplayName</code></pre>
+      <pre class="code-snippet"><code>Get-CimInstance Win32_ComputerSystemProduct | Select-Object Name,SerialNumber; Write-Host (Get-ADUser $env:USERNAME -Properties DisplayName).DisplayName</code></pre>
       <button id="copy-snippet-btn" type="button" class="btn-secondary">Copy</button>
     </section>
 
