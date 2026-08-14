@@ -74,14 +74,41 @@ async function verifyToken(token: string): Promise<'ok' | 'invalid' | 'unreachab
 }
 
 async function loadAssets() {
+  const token = getToken();
+  if (!token) return;
   try {
-    const res = await fetch(`${API_URL}/api/assets`);
+    const res = await fetch(`${API_URL}/api/assets`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.status === 401) {
+      setToken(null);
+      loginError = 'Session expired. Please log in again.';
+      disconnectSocket();
+      assets = [];
+      render();
+      return;
+    }
     assets = await res.json();
     actionError = '';
   } catch (e) {
     actionError = `Could not reach ${API_URL}. Is the backend running, and have you accepted its certificate warning in this browser?`;
   }
   render();
+}
+
+let socket: ReturnType<typeof io> | null = null;
+
+function connectSocket() {
+  if (socket) return;
+  socket = io(API_URL);
+  socket.on('assetAdded', () => loadAssets());
+  socket.on('assetUpdated', () => loadAssets());
+  socket.on('assetDeleted', () => loadAssets());
+}
+
+function disconnectSocket() {
+  socket?.disconnect();
+  socket = null;
 }
 
 async function authedRequest(url: string, method: string, body?: AssetFields): Promise<boolean> {
@@ -182,7 +209,7 @@ function render() {
 
     ${!token ? `
       <section id="login-panel" class="panel">
-        <h2>Log in to make changes</h2>
+        <h2>Log in to view and edit assets</h2>
         <form id="login-form">
           <input id="login-token" type="password" placeholder="Admin token" autocomplete="current-password" required />
           <button type="submit">Log in</button>
@@ -205,15 +232,19 @@ function render() {
     <section class="panel">
       <h2>Assets</h2>
       ${actionError ? `<p class="error">${escapeHtml(actionError)}</p>` : ''}
-      <input id="search-input" type="search" placeholder="Search assets..." value="${escapeHtml(searchQuery)}" class="search-input" />
-      <table>
-        <thead>
-          <tr><th>Computer</th><th>User</th><th>Model</th><th>Serial</th><th>Added</th><th></th></tr>
-        </thead>
-        <tbody>
-          ${rows.map(a => assetRow(a, token)).join('')}
-        </tbody>
-      </table>
+      ${!token ? `
+        <p>Log in above to view assets.</p>
+      ` : `
+        <input id="search-input" type="search" placeholder="Search assets..." value="${escapeHtml(searchQuery)}" class="search-input" />
+        <table>
+          <thead>
+            <tr><th>Computer</th><th>User</th><th>Model</th><th>Serial</th><th>Added</th><th></th></tr>
+          </thead>
+          <tbody>
+            ${rows.map(a => assetRow(a, token)).join('')}
+          </tbody>
+        </table>
+      `}
     </section>
   `;
 
@@ -234,6 +265,8 @@ function render() {
 
   document.getElementById('logout-btn')?.addEventListener('click', () => {
     setToken(null);
+    disconnectSocket();
+    assets = [];
     render();
   });
 
@@ -244,7 +277,9 @@ function render() {
     if (result === 'ok') {
       setToken(input.value);
       loginError = '';
+      connectSocket();
       render();
+      loadAssets();
     } else if (result === 'invalid') {
       loginError = 'Invalid token.';
       render();
@@ -314,10 +349,8 @@ function render() {
   });
 }
 
-const socket = io(API_URL);
-socket.on('assetAdded', () => loadAssets());
-socket.on('assetUpdated', () => loadAssets());
-socket.on('assetDeleted', () => loadAssets());
-
 render();
-loadAssets();
+if (getToken()) {
+  connectSocket();
+  loadAssets();
+}

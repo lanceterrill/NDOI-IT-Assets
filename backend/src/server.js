@@ -95,7 +95,7 @@ app.post('/api/verify', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/assets', async (req, res) => {
+app.get('/api/assets', requireAuth, async (req, res) => {
   res.json(await db.getAllAssets());
 });
 
