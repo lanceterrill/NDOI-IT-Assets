@@ -61,30 +61,46 @@ function visibleAssets(): Asset[] {
   );
 }
 
-async function verifyToken(token: string): Promise<boolean> {
-  const res = await fetch(`${API_URL}/api/verify`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return res.ok;
+async function verifyToken(token: string): Promise<'ok' | 'invalid' | 'unreachable'> {
+  try {
+    const res = await fetch(`${API_URL}/api/verify`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.ok ? 'ok' : 'invalid';
+  } catch (e) {
+    return 'unreachable';
+  }
 }
 
 async function loadAssets() {
-  const res = await fetch(`${API_URL}/api/assets`);
-  assets = await res.json();
+  try {
+    const res = await fetch(`${API_URL}/api/assets`);
+    assets = await res.json();
+    actionError = '';
+  } catch (e) {
+    actionError = `Could not reach ${API_URL}. Is the backend running, and have you accepted its certificate warning in this browser?`;
+  }
   render();
 }
 
 async function authedRequest(url: string, method: string, body?: AssetFields): Promise<boolean> {
   const token = getToken();
-  const res = await fetch(url, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (e) {
+    actionError = `Could not reach ${API_URL}. Is the backend running, and have you accepted its certificate warning in this browser?`;
+    render();
+    return false;
+  }
   if (res.status === 401) {
     setToken(null);
     loginError = 'Session expired. Please log in again.';
@@ -224,13 +240,16 @@ function render() {
   document.getElementById('login-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const input = document.getElementById('login-token') as HTMLInputElement;
-    const ok = await verifyToken(input.value);
-    if (ok) {
+    const result = await verifyToken(input.value);
+    if (result === 'ok') {
       setToken(input.value);
       loginError = '';
       render();
-    } else {
+    } else if (result === 'invalid') {
       loginError = 'Invalid token.';
+      render();
+    } else {
+      loginError = `Could not reach ${API_URL}. Is the backend running, and have you accepted its certificate warning in this browser?`;
       render();
     }
   });
